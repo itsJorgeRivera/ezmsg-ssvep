@@ -59,16 +59,16 @@ class SSVEPSystem( ez.Collection ):
         )
 
         self.APP.panels = {
-            'source': self.SOURCE_PLOT.GUI.panel,
+            'source': self.SOURCE_PLOT.panel,
         }
 
 
     def network( self ) -> ez.NetworkDefinition:
         return ( 
-            # ( self.SOURCE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL ),
+            ( self.SOURCE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL ),
             ( self.SOURCE.OUTPUT_SIGNAL, self.FILTER.INPUT_SIGNAL ),
             ( self.FILTER.OUTPUT_SIGNAL, self.DECIMATE.INPUT_SIGNAL ),
-            ( self.DECIMATE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL),
+            # ( self.DECIMATE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL),
         )
 
     def process_components( self ) -> Tuple[ ez.Component, ... ]:
