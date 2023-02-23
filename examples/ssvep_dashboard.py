@@ -14,31 +14,45 @@ from ezmsg.openbci.components import (
 
 from ezmsg.panel.application import Application, ApplicationSettings
 from ezmsg.panel.timeseriesplot import TimeSeriesPlot
+from ezmsg.panel.spectrum import SpectrumPlot
+from ezmsg.panel.recorder import Recorder, RecorderSettings
 
 from ezmsg.sigproc.butterworthfilter import ButterworthFilter, ButterworthFilterSettings
 from ezmsg.sigproc.decimate import Decimate, DownsampleSettings
+from ezmsg.sigproc.sampler import Sampler, SamplerSettings
+
+from ezmsg.ssvep.stimserver.server import StimServer, StimServerSettings
 
 from typing import Dict, Tuple
 
 class SSVEPSystemSettings( ez.Settings ):
     openbcisource_settings: OpenBCISourceSettings
+    data_dir: Path
+    stimserver_port: int = 8080
 
 
 class SSVEPSystem( ez.Collection ):
 
     SETTINGS: SSVEPSystemSettings
 
+    STIM = StimServer()
+
     SOURCE = OpenBCISource()
-    SOURCE_PLOT = TimeSeriesPlot()
     FILTER = ButterworthFilter()
     DECIMATE = Decimate()
+    SAMPLER = Sampler()
+    RECORDER = Recorder()
+
     APP = Application()
+    SOURCE_PLOT = TimeSeriesPlot()
+    SPECTRUM_PLOT = SpectrumPlot()
 
     def configure( self ) -> None:
         self.SOURCE.apply_settings( self.SETTINGS.openbcisource_settings )
 
         self.FILTER.apply_settings( 
             ButterworthFilterSettings(
+                axis = 'time',
                 order = 3, 
                 cuton = 1.0, 
                 cutoff = 50.0 
@@ -47,7 +61,27 @@ class SSVEPSystem( ez.Collection ):
 
         self.DECIMATE.apply_settings(
             DownsampleSettings(
+                axis = 'time',
                 factor = 2
+            )
+        )
+
+        self.SAMPLER.apply_settings(
+            SamplerSettings(
+                buffer_dur = 20.0,
+                axis = 'time'
+            )
+        )
+
+        self.RECORDER.apply_settings(
+            RecorderSettings(
+                data_dir = self.SETTINGS.data_dir
+            )
+        )
+
+        self.STIM.apply_settings(
+            StimServerSettings(
+                port = self.SETTINGS.stimserver_port
             )
         )
 
@@ -60,18 +94,25 @@ class SSVEPSystem( ez.Collection ):
 
         self.APP.panels = {
             'source': self.SOURCE_PLOT.panel,
+            'spectrum': self.SPECTRUM_PLOT.panel,
+            'stim': self.STIM.panel,
+            'recorder': self.RECORDER.panel
         }
 
 
-    def network( self ) -> ez.NetworkDefinition:
+    def network(self) -> ez.NetworkDefinition:
         return ( 
-            ( self.SOURCE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL ),
-            ( self.SOURCE.OUTPUT_SIGNAL, self.FILTER.INPUT_SIGNAL ),
-            ( self.FILTER.OUTPUT_SIGNAL, self.DECIMATE.INPUT_SIGNAL ),
-            # ( self.DECIMATE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL),
+            (self.SOURCE.OUTPUT_SIGNAL, self.SOURCE_PLOT.INPUT_SIGNAL),
+            (self.SOURCE.OUTPUT_SIGNAL, self.FILTER.INPUT_SIGNAL),
+            (self.FILTER.OUTPUT_SIGNAL, self.DECIMATE.INPUT_SIGNAL),
+            (self.DECIMATE.OUTPUT_SIGNAL, self.SPECTRUM_PLOT.INPUT_SIGNAL),
+
+            (self.STIM.OUTPUT_SAMPLETRIGGER, self.SAMPLER.INPUT_TRIGGER),
+            (self.DECIMATE.OUTPUT_SIGNAL, self.SAMPLER.INPUT_SIGNAL),
+            (self.SAMPLER.OUTPUT_SAMPLE, self.RECORDER.INPUT_MESSAGE)
         )
 
-    def process_components( self ) -> Tuple[ ez.Component, ... ]:
+    def process_components(self) -> Tuple[ez.Component, ...]:
         return ( 
             self.SOURCE,
         )
@@ -117,7 +158,7 @@ if __name__ == "__main__":
         '--powerdown',
         type = str,
         help = 'Channels to disconnect/powerdown. Default: 00111111',
-        default = '00111111'
+        default = '00000000'
     )
 
     parser.add_argument(
@@ -170,7 +211,6 @@ if __name__ == "__main__":
     )
 
     settings = SSVEPSystemSettings(
-
         openbcisource_settings = OpenBCISourceSettings(
             device = args.device,
             blocksize = args.blocksize,
@@ -181,6 +221,8 @@ if __name__ == "__main__":
                 ] )
             )
         ),
+
+        data_dir = args.data_dir
     )
 
     system = SSVEPSystem( settings )
