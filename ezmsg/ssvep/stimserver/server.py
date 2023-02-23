@@ -20,7 +20,7 @@ from typing import AsyncGenerator, Optional
 
 logger = logging.getLogger( __name__ )
 
-@dataclass
+@dataclass(frozen = True)
 class StimServerSettingsMessage:
     cert: Optional[Path] = None
     key: Optional[Path] = None
