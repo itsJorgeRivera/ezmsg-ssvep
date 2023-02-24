@@ -22,6 +22,7 @@ from ezmsg.sigproc.decimate import Decimate, DownsampleSettings
 from ezmsg.sigproc.sampler import Sampler, SamplerSettings
 
 from ezmsg.ssvep.stimserver.server import StimServer, StimServerSettings
+from ezmsg.ssvep.spectralstats import SpectralStats, SpectralStatsSettings
 
 from typing import Dict, Tuple
 
@@ -42,6 +43,7 @@ class SSVEPSystem( ez.Collection ):
     DECIMATE = Decimate()
     SAMPLER = Sampler()
     RECORDER = Recorder()
+    STATS = SpectralStats()
 
     APP = Application()
     SOURCE_PLOT = TimeSeriesPlot()
@@ -73,6 +75,13 @@ class SSVEPSystem( ez.Collection ):
             )
         )
 
+        self.STATS.apply_settings(
+            SpectralStatsSettings(
+                integration_time = 1.0
+
+            )
+        )
+
         self.RECORDER.apply_settings(
             RecorderSettings(
                 data_dir = self.SETTINGS.data_dir
@@ -96,7 +105,8 @@ class SSVEPSystem( ez.Collection ):
             'source': self.SOURCE_PLOT.panel,
             'spectrum': self.SPECTRUM_PLOT.panel,
             'stim': self.STIM.panel,
-            'recorder': self.RECORDER.panel
+            'recorder': self.RECORDER.panel,
+            'stats': self.STATS.panel
         }
 
 
@@ -109,7 +119,9 @@ class SSVEPSystem( ez.Collection ):
 
             (self.STIM.OUTPUT_SAMPLETRIGGER, self.SAMPLER.INPUT_TRIGGER),
             (self.DECIMATE.OUTPUT_SIGNAL, self.SAMPLER.INPUT_SIGNAL),
-            (self.SAMPLER.OUTPUT_SAMPLE, self.RECORDER.INPUT_MESSAGE)
+            (self.SAMPLER.OUTPUT_SAMPLE, self.RECORDER.INPUT_MESSAGE),
+
+            (self.SAMPLER.OUTPUT_SAMPLE, self.STATS.INPUT_SAMPLE),
         )
 
     def process_components(self) -> Tuple[ez.Component, ...]:
