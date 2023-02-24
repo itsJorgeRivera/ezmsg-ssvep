@@ -87,7 +87,7 @@ class SpectralStatsCalc(ez.Unit):
         axis_idx = msg.sample.get_axis_idx(self.STATE.cur_settings.time_axis)
         t = (np.arange(msg.sample.shape[axis_idx]) * axis.gain) + msg.trigger.period[0]
         t0_idx = np.argmin(np.abs(t)).item()
-        n_samp = int( self.STATE.cur_settings.integration_time / axis.gain )
+        n_samp = int(self.STATE.cur_settings.integration_time / axis.gain)
         null_data = msg.sample.data[(slice(None),) * axis_idx + (slice(t0_idx - n_samp, t0_idx),)]
         ssvep_data = msg.sample.data[(slice(None),) * axis_idx + (slice(t0_idx, t0_idx + n_samp),)]
         yield self.OUTPUT_NULL_SIGNAL, replace(msg.sample, data = null_data)
@@ -120,19 +120,26 @@ class SpectralStatsCalc(ez.Unit):
         """ Get incoming null and SSVEP spectra and update statistics """
         while True:
             self.STATE.spectra_null.append(await self.STATE.spect_null_queue.get())
-            ez.logger.info( 'Got a null spectrum' )
             self.STATE.spectra_ssvep.append(await self.STATE.spect_ssvep_queue.get())
-            ez.logger.info( 'Synchronized with ssvep spectrum' )
             self.STATE.refresh_stats.set()
 
     @ez.publisher(OUTPUT_STATS)
     async def update_stats(self) -> AsyncGenerator:
         while True:
             await self.STATE.refresh_stats.wait()
-            ez.logger.info('Refreshing Statistics')
             self.STATE.refresh_stats.clear()
-            diff = self.STATE.spectra_ssvep[-1].data - self.STATE.spectra_null[-1].data
-            yield self.OUTPUT_STATS, replace(self.STATE.spectra_ssvep[-1], data = diff)
+            if len(self.STATE.spectra_null) < 2 or len(self.STATE.spectra_ssvep) < 2:
+                ez.logger.info('Insufficient number of observations')
+                yield self.OUTPUT_STATS, None
+                continue
+
+            ssvep = np.array([spect.data for spect in self.STATE.spectra_ssvep])
+            null = np.array([spect.data for spect in self.STATE.spectra_null])
+
+            stats = scipy.stats.mannwhitneyu(ssvep, null, alternative = 'two-sided')
+            inv_log10_p = -np.log10(stats.pvalue * np.prod(ssvep.shape[1:]))
+
+            yield self.OUTPUT_STATS, replace(self.STATE.spectra_ssvep[-1], data = inv_log10_p)
 
 
 @dataclass(frozen = True)
@@ -221,7 +228,9 @@ class SpectralStats(ez.Collection):
             LinePlotSettings(
                 name = "Spectral Statistics",
                 x_axis = 'freq', 
-                x_axis_scale = AxisScale.LOG
+                x_axis_scale = AxisScale.LOG,
+                x_axis_label = 'Frequency (Hz)',
+                y_axis_label = r'\[-\log_{10}(p)\text{ -- Bonferroni Corrected }\]'
             )
         )
 
