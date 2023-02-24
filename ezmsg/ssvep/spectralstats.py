@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import panel
 import scipy.stats
@@ -20,6 +20,7 @@ from typing import AsyncGenerator, List
 
 @dataclass(frozen = True)
 class SpectralStatsSettingsMessage:
+    time_axis: str
     integration_time: float
 
 class SpectralStatsSettings(ez.Settings, SpectralStatsSettingsMessage):
@@ -78,10 +79,19 @@ class SpectralStatsCalc(ez.Unit):
         synchronization for statistics. 
         """
 
-        # TODO:
+        if msg.trigger.period is None:
+            ez.logger.info('Incoming sample has no period; discarding')
+            return
 
-        yield self.OUTPUT_NULL_SIGNAL, msg.sample
-        yield self.OUTPUT_SSVEP_SIGNAL, msg.sample
+        axis = msg.sample.get_axis(self.STATE.cur_settings.time_axis)
+        axis_idx = msg.sample.get_axis_idx(self.STATE.cur_settings.time_axis)
+        t = (np.arange(msg.sample.shape[axis_idx]) * axis.gain) + msg.trigger.period[0]
+        t0_idx = np.argmin(np.abs(t)).item()
+        n_samp = int( self.STATE.cur_settings.integration_time / axis.gain )
+        null_data = msg.sample.data[(slice(None),) * axis_idx + (slice(t0_idx - n_samp, t0_idx),)]
+        ssvep_data = msg.sample.data[(slice(None),) * axis_idx + (slice(t0_idx, t0_idx + n_samp),)]
+        yield self.OUTPUT_NULL_SIGNAL, replace(msg.sample, data = null_data)
+        yield self.OUTPUT_SSVEP_SIGNAL, replace(msg.sample, data = ssvep_data)
 
     @ez.subscriber(INPUT_NULL_SPECTRUM)
     async def on_null_spectrum(self, msg: AxisArray) -> None:
@@ -121,7 +131,8 @@ class SpectralStatsCalc(ez.Unit):
             await self.STATE.refresh_stats.wait()
             ez.logger.info('Refreshing Statistics')
             self.STATE.refresh_stats.clear()
-            yield self.OUTPUT_STATS, self.STATE.spectra_ssvep[-1]
+            diff = self.STATE.spectra_ssvep[-1].data - self.STATE.spectra_null[-1].data
+            yield self.OUTPUT_STATS, replace(self.STATE.spectra_ssvep[-1], data = diff)
 
 
 @dataclass(frozen = True)

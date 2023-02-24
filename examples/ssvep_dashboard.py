@@ -77,6 +77,7 @@ class SSVEPSystem( ez.Collection ):
 
         self.STATS.apply_settings(
             SpectralStatsSettings(
+                time_axis = 'time',
                 integration_time = 1.0
 
             )
