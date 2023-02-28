@@ -168,10 +168,10 @@ class SSVEPStim(ez.Unit):
                 for control in self.controls:
                     control.disabled = True
                 
-                n_trials: int = self.STATE.num_trials.value
-                trial_dur: float = self.STATE.trial_dur.value
-                isi_range: Tuple[float, float] = self.STATE.isi_range.value
-                stim_freq = 1.0 / self.STATE.period.value
+                n_trials: int = self.STATE.num_trials.value # type: ignore
+                trial_dur: float = self.STATE.trial_dur.value # type: ignore
+                isi_range: Tuple[float, float] = self.STATE.isi_range.value # type: ignore
+                stim_freq = 1.0 / self.STATE.period.value # type: ignore
 
                 # Pre-Trial Period
                 self.STATE.stim_pane.object = self.STATE.fixation
@@ -208,10 +208,10 @@ class SSVEPStim(ez.Unit):
     def design_stimulus(self) -> None:
 
         self.STATE.stim = RadialCheckerboard(
-            duration = self.STATE.period.value,
-            radial_freq = self.STATE.radial_freq.value,
-            radial_exp = self.STATE.radial_exp.value,
-            angular_freq = self.STATE.angular_freq.value, 
+            duration = self.STATE.period.value, # type: ignore
+            radial_freq = self.STATE.radial_freq.value, # type: ignore
+            radial_exp = self.STATE.radial_exp.value, # type: ignore
+            angular_freq = self.STATE.angular_freq.value, # type: ignore
             size = self.SETTINGS.size
         )
 
