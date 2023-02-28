@@ -6,7 +6,7 @@ import imageio
 import numpy as np
 import numpy.typing as npt
 
-from typing import List, Optional
+from typing import List
 
 @dataclass(frozen = True)
 class GIFStimulus:
