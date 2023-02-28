@@ -233,9 +233,4 @@ class SSVEPStim(ez.Unit):
             ),
             self.STATE.stim_pane,
         )
-
-
-
-
-
-    
+        
