@@ -41,11 +41,7 @@ class GIFStimulus:
         raise NotImplementedError
     
     def _repr_html_(self) -> str:
-        return f"""
-        <div width={self.size}px, height={self.size}px>
-            <img src="{self.gif()}"/>
-        </div>
-        """
+        return f"""<img src="{self.gif()}"/>"""
 
 
 @dataclass
