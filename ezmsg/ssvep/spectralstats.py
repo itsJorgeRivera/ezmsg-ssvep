@@ -22,6 +22,7 @@ from typing import AsyncGenerator, List
 class SpectralStatsSettingsMessage:
     time_axis: str
     integration_time: float
+    multiple_comparisons: bool = True
 
 class SpectralStatsSettings(ez.Settings, SpectralStatsSettingsMessage):
     ...
@@ -137,7 +138,8 @@ class SpectralStatsCalc(ez.Unit):
             null = np.array([spect.data for spect in self.STATE.spectra_null])
 
             stats = scipy.stats.mannwhitneyu(ssvep, null, alternative = 'two-sided')
-            inv_log10_p = -np.log10(stats.pvalue * np.prod(ssvep.shape[1:]))
+            correction = np.prod(ssvep.shape[1:]) if self.SETTINGS.multiple_comparisons else 1.0
+            inv_log10_p = -np.log10(stats.pvalue * correction)
 
             yield self.OUTPUT_STATS, replace(self.STATE.spectra_ssvep[-1], data = inv_log10_p)
 
@@ -207,18 +209,48 @@ class SpectralStats(ez.Collection):
     INPUT_SAMPLE = ez.InputStream(SampleMessage)
     INPUT_RESET = ez.InputStream(ez.Flag)
     INPUT_REFRESH = ez.InputStream(ez.Flag)
+    OUTPUT_STATS = ez.OutputStream(AxisArray)
 
     CALC = SpectralStatsCalc()
     SPECT_NULL = Spectrum()
     SPECT_SSVEP = Spectrum()
-    CONTROLS = SpectralStatsControls()
-    PLOT = LinePlot()
 
     def configure(self) -> None:
         self.CALC.apply_settings(self.SETTINGS)
         spectrum_settings = SpectrumSettings(axis = 'time')
         self.SPECT_NULL.apply_settings(spectrum_settings)
         self.SPECT_SSVEP.apply_settings(spectrum_settings)
+
+    def network(self) -> ez.NetworkDefinition:
+        return (
+            (self.INPUT_SAMPLE, self.CALC.INPUT_SAMPLE),
+
+            (self.CALC.OUTPUT_NULL_SIGNAL, self.SPECT_NULL.INPUT_SIGNAL),
+            (self.CALC.OUTPUT_SSVEP_SIGNAL, self.SPECT_SSVEP.INPUT_SIGNAL),
+            (self.SPECT_NULL.OUTPUT_SIGNAL, self.CALC.INPUT_NULL_SPECTRUM),
+            (self.SPECT_SSVEP.OUTPUT_SIGNAL, self.CALC.INPUT_SSVEP_SPECTRUM),
+
+            (self.INPUT_REFRESH, self.CALC.INPUT_REFRESH),
+            (self.INPUT_RESET, self.CALC.INPUT_RESET),
+            (self.CALC.OUTPUT_STATS, self.OUTPUT_STATS)
+        )
+
+
+class SpectralStatsPanel(ez.Collection):
+
+    SETTINGS: SpectralStatsSettings
+
+    INPUT_SAMPLE = ez.InputStream(SampleMessage)
+    INPUT_RESET = ez.InputStream(ez.Flag)
+    INPUT_REFRESH = ez.InputStream(ez.Flag)
+
+    STATS = SpectralStats()
+    CONTROLS = SpectralStatsControls()
+    PLOT = LinePlot()
+
+    def configure(self) -> None:
+        self.STATS.apply_settings(self.SETTINGS)
+
         self.CONTROLS.apply_settings(
             SpectralStatsControlsSettings(
 
@@ -235,20 +267,16 @@ class SpectralStats(ez.Collection):
         )
 
     def network(self) -> ez.NetworkDefinition:
-        return (
-            (self.INPUT_SAMPLE, self.CALC.INPUT_SAMPLE),
+        return(
+            (self.INPUT_SAMPLE, self.STATS.INPUT_SAMPLE),
+            (self.STATS.OUTPUT_STATS, self.PLOT.INPUT_SIGNAL),
+            (self.CONTROLS.OUTPUT_RESET, self.STATS.INPUT_RESET),
+            (self.CONTROLS.OUTPUT_REFRESH, self.STATS.INPUT_REFRESH),
 
-            (self.CALC.OUTPUT_NULL_SIGNAL, self.SPECT_NULL.INPUT_SIGNAL),
-            (self.CALC.OUTPUT_SSVEP_SIGNAL, self.SPECT_SSVEP.INPUT_SIGNAL),
-            (self.SPECT_NULL.OUTPUT_SIGNAL, self.CALC.INPUT_NULL_SPECTRUM),
-            (self.SPECT_SSVEP.OUTPUT_SIGNAL, self.CALC.INPUT_SSVEP_SPECTRUM),
-
-            (self.INPUT_REFRESH, self.CALC.INPUT_REFRESH),
-            (self.INPUT_RESET, self.CALC.INPUT_RESET),
-            (self.CALC.OUTPUT_STATS, self.PLOT.INPUT_SIGNAL),
-            (self.CONTROLS.OUTPUT_RESET, self.CALC.INPUT_RESET),
-            (self.CONTROLS.OUTPUT_REFRESH, self.CALC.INPUT_REFRESH),
+            (self.INPUT_REFRESH, self.STATS.INPUT_REFRESH),
+            (self.INPUT_RESET, self.STATS.INPUT_RESET)
         )
+
 
     def panel(self) -> panel.viewable.Viewable:
         return panel.Row(

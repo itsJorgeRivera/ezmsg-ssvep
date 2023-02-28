@@ -21,8 +21,8 @@ from ezmsg.sigproc.butterworthfilter import ButterworthFilter, ButterworthFilter
 from ezmsg.sigproc.decimate import Decimate, DownsampleSettings
 from ezmsg.sigproc.sampler import Sampler, SamplerSettings
 
-from ezmsg.ssvep.stimserver.server import StimServer, StimServerSettings
-from ezmsg.ssvep.spectralstats import SpectralStats, SpectralStatsSettings
+from ezmsg.ssvep.ssvep import SSVEPStim
+from ezmsg.ssvep.spectralstats import SpectralStatsPanel, SpectralStatsSettings
 
 from typing import Dict, Tuple
 
@@ -36,14 +36,14 @@ class SSVEPSystem( ez.Collection ):
 
     SETTINGS: SSVEPSystemSettings
 
-    STIM = StimServer()
+    STIM = SSVEPStim()
 
     SOURCE = OpenBCISource()
     FILTER = ButterworthFilter()
     DECIMATE = Decimate()
     SAMPLER = Sampler()
     RECORDER = Recorder()
-    STATS = SpectralStats()
+    STATS = SpectralStatsPanel()
 
     APP = Application()
     SOURCE_PLOT = TimeSeriesPlot()
@@ -89,12 +89,6 @@ class SSVEPSystem( ez.Collection ):
             )
         )
 
-        self.STIM.apply_settings(
-            StimServerSettings(
-                port = self.SETTINGS.stimserver_port
-            )
-        )
-
         self.APP.apply_settings(
             ApplicationSettings(
                 port = 8083,
@@ -118,7 +112,7 @@ class SSVEPSystem( ez.Collection ):
             (self.FILTER.OUTPUT_SIGNAL, self.DECIMATE.INPUT_SIGNAL),
             (self.DECIMATE.OUTPUT_SIGNAL, self.SPECTRUM_PLOT.INPUT_SIGNAL),
 
-            (self.STIM.OUTPUT_SAMPLETRIGGER, self.SAMPLER.INPUT_TRIGGER),
+            (self.STIM.OUTPUT_TRIGGER, self.SAMPLER.INPUT_TRIGGER),
             (self.DECIMATE.OUTPUT_SIGNAL, self.SAMPLER.INPUT_SIGNAL),
             (self.SAMPLER.OUTPUT_SAMPLE, self.RECORDER.INPUT_MESSAGE),
 
