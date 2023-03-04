@@ -1,5 +1,5 @@
 import asyncio
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 import panel
 import scipy.stats
@@ -18,17 +18,13 @@ from param.parameterized import Event
 from typing import AsyncGenerator, List
 
 
-@dataclass(frozen = True)
-class SpectralStatsSettingsMessage:
+class SpectralStatsSettings(ez.Settings):
     time_axis: str
     integration_time: float
     multiple_comparisons: bool = True
 
-class SpectralStatsSettings(ez.Settings, SpectralStatsSettingsMessage):
-    ...
-
 class SpectralStatsState(ez.State):
-    cur_settings: SpectralStatsSettingsMessage
+    cur_settings: SpectralStatsSettings
     spect_null_queue: "asyncio.Queue[AxisArray]"
     spect_ssvep_queue: "asyncio.Queue[AxisArray]"
     spectra_null: List[AxisArray]
@@ -39,7 +35,7 @@ class SpectralStatsCalc(ez.Unit):
     SETTINGS: SpectralStatsSettings
     STATE: SpectralStatsState
 
-    INPUT_SETTINGS = ez.InputStream(SpectralStatsSettingsMessage)
+    INPUT_SETTINGS = ez.InputStream(SpectralStatsSettings)
     INPUT_SAMPLE = ez.InputStream(SampleMessage)
 
     OUTPUT_NULL_SIGNAL = ez.OutputStream(AxisArray)
@@ -63,7 +59,7 @@ class SpectralStatsCalc(ez.Unit):
         self.STATE.spectra_ssvep = list()
 
     @ez.subscriber(INPUT_SETTINGS)
-    async def on_settings(self, msg: SpectralStatsSettingsMessage) -> None:
+    async def on_settings(self, msg: SpectralStatsSettings) -> None:
         self.cur_settings = msg
 
     @ez.subscriber(INPUT_SAMPLE)
@@ -144,11 +140,7 @@ class SpectralStatsCalc(ez.Unit):
             yield self.OUTPUT_STATS, replace(self.STATE.spectra_ssvep[-1], data = inv_log10_p)
 
 
-@dataclass(frozen = True)
-class SpectralStatsControlsSettingsMessage:
-    ...
-
-class SpectralStatsControlsSettings(ez.Settings, SpectralStatsControlsSettingsMessage):
+class SpectralStatsControlsSettings(ez.Settings):
     ...
 
 class SpectralStatsControlsState(ez.State):

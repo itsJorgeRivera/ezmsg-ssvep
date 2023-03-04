@@ -1,6 +1,5 @@
 import random
 import asyncio
-from dataclasses import dataclass
 
 import panel
 import ezmsg.core as ez
@@ -14,12 +13,9 @@ from .stimulus import RadialCheckerboard, Fixation
 
 from typing import Optional, AsyncGenerator, List, Tuple
 
-@dataclass(frozen = True)
-class SSVEPStimSettingsMessage:
+class SSVEPStimSettings(ez.Settings):
     size: int = 600 # px
 
-class SSVEPStimSettings(ez.Settings, SSVEPStimSettingsMessage):
-    ...
 
 class SSVEPStimState(ez.State):
     fixation: Fixation
