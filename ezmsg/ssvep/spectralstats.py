@@ -126,7 +126,6 @@ class SpectralStatsCalc(ez.Unit):
             await self.STATE.refresh_stats.wait()
             self.STATE.refresh_stats.clear()
             if len(self.STATE.spectra_null) < 2 or len(self.STATE.spectra_ssvep) < 2:
-                ez.logger.info('Insufficient number of observations')
                 yield self.OUTPUT_STATS, None
                 continue
 
