@@ -1,10 +1,12 @@
 import asyncio
+import typing
 from dataclasses import replace
 
 import panel
 import scipy.stats
 
 import numpy as np
+import numpy.typing as npt
 import ezmsg.core as ez
 
 from ezmsg.util.messages.axisarray import AxisArray
@@ -15,20 +17,20 @@ from ezmsg.panel.lineplot import LinePlot, LinePlotSettings, AxisScale
 
 from param.parameterized import Event
 
-from typing import AsyncGenerator, List
-
 
 class SpectralStatsSettings(ez.Settings):
     time_axis: str
     integration_time: float
+    freq_axis: str = 'freq'
+    freq_range: slice = slice(None)
     multiple_comparisons: bool = True
 
 class SpectralStatsState(ez.State):
     cur_settings: SpectralStatsSettings
     spect_null_queue: "asyncio.Queue[AxisArray]"
     spect_ssvep_queue: "asyncio.Queue[AxisArray]"
-    spectra_null: List[AxisArray]
-    spectra_ssvep: List[AxisArray]
+    spectra_null: typing.List[AxisArray]
+    spectra_ssvep: typing.List[AxisArray]
     refresh_stats: asyncio.Event
 
 class SpectralStatsCalc(ez.Unit):
@@ -65,7 +67,7 @@ class SpectralStatsCalc(ez.Unit):
     @ez.subscriber(INPUT_SAMPLE)
     @ez.publisher(OUTPUT_NULL_SIGNAL)
     @ez.publisher(OUTPUT_SSVEP_SIGNAL)
-    async def split_sample(self, msg: SampleMessage) -> AsyncGenerator:
+    async def split_sample(self, msg: SampleMessage) -> typing.AsyncGenerator:
         """ Each sample that comes into this unit is 
         expected to be zero-centered with respect to the 
         onset of a strobing period.  This coroutine splits
@@ -113,7 +115,7 @@ class SpectralStatsCalc(ez.Unit):
         self.STATE.refresh_stats.set()
 
     @ez.task
-    async def synchronize_spectra(self) -> AsyncGenerator:
+    async def synchronize_spectra(self) -> typing.AsyncGenerator:
         """ Get incoming null and SSVEP spectra and update statistics """
         while True:
             self.STATE.spectra_null.append(await self.STATE.spect_null_queue.get())
@@ -121,7 +123,7 @@ class SpectralStatsCalc(ez.Unit):
             self.STATE.refresh_stats.set()
 
     @ez.publisher(OUTPUT_STATS)
-    async def update_stats(self) -> AsyncGenerator:
+    async def update_stats(self) -> typing.AsyncGenerator:
         while True:
             await self.STATE.refresh_stats.wait()
             self.STATE.refresh_stats.clear()
@@ -129,8 +131,8 @@ class SpectralStatsCalc(ez.Unit):
                 yield self.OUTPUT_STATS, None
                 continue
 
-            ssvep = np.array([spect.data for spect in self.STATE.spectra_ssvep])
-            null = np.array([spect.data for spect in self.STATE.spectra_null])
+            ssvep = np.array([spect.sel(**{self.SETTINGS.freq_axis: self.SETTINGS.freq_range}).data for spect in self.STATE.spectra_ssvep])
+            null = np.array([spect.sel(**{self.SETTINGS.freq_axis: self.SETTINGS.freq_range}).data for spect in self.STATE.spectra_null])
 
             stats = scipy.stats.mannwhitneyu(ssvep, null, alternative = 'two-sided')
             correction = np.prod(ssvep.shape[1:]) if self.SETTINGS.multiple_comparisons else 1.0
@@ -174,13 +176,13 @@ class SpectralStatsControls(ez.Unit):
         self.STATE.reset_btn.param.watch(on_reset_btn, 'value')
 
     @ez.publisher(OUTPUT_RESET)
-    async def pub_reset(self) -> AsyncGenerator:
+    async def pub_reset(self) -> typing.AsyncGenerator:
         while True:
             msg = await self.STATE.reset_queue.get()
             yield self.OUTPUT_RESET, msg
 
     @ez.publisher(OUTPUT_REFRESH)
-    async def pub_refresh(self) -> AsyncGenerator:
+    async def pub_refresh(self) -> typing.AsyncGenerator:
         while True:
             msg = await self.STATE.refresh_queue.get()
             yield self.OUTPUT_REFRESH, msg
@@ -208,7 +210,10 @@ class SpectralStats(ez.Collection):
 
     def configure(self) -> None:
         self.CALC.apply_settings(self.SETTINGS)
-        spectrum_settings = SpectrumSettings(axis = 'time')
+        spectrum_settings = SpectrumSettings(
+            axis = 'time', 
+            out_axis = self.SETTINGS.freq_axis
+        )
         self.SPECT_NULL.apply_settings(spectrum_settings)
         self.SPECT_SSVEP.apply_settings(spectrum_settings)
 
